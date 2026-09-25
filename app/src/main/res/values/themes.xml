@@ -1,0 +1,6 @@
+<resources>
+    <!-- Compose draws the UI; this theme only covers the window before the first frame. -->
+    <style name="Theme.GymTracker" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+    </style>
+</resources>
