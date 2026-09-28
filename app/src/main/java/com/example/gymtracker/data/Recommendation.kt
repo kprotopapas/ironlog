@@ -68,3 +68,28 @@ fun recommend(
     }
     return null
 }
+
+/**
+ * Sets for a preset exercise: the recommended weight when there's history, with last session's
+ * reps to beat if the weight stays and the bottom of the range if it changes. Without history,
+ * the preset's own defaults.
+ */
+fun prefilledSets(preset: PresetExercise, workouts: List<Workout>, unit: WeightUnit): List<ExerciseSet> {
+    val probe = WorkoutExercise("", preset.name, preset.category, emptyList(), equipment = preset.equipment, perSide = preset.perSide)
+    val rec = recommend(probe, workouts, unit)
+        ?: return List(preset.defaultSets) { ExerciseSet(preset.defaultReps, preset.defaultWeight, unit, false) }
+    return List(preset.defaultSets) { i ->
+        val reps = if (rec.action == WeightAction.HOLD) rec.lastReps.getOrElse(i) { rec.lastReps.last() } else TARGET_REPS.first
+        ExerciseSet(reps, rec.nextWeight, unit, false)
+    }
+}
+
+/** Whether [exercise]'s heaviest set is above (+1) or below (−1) last session's working weight; 0 if the same. */
+fun weightChange(exercise: WorkoutExercise, rec: Recommendation, unit: WeightUnit): Int {
+    val current = exercise.sets.maxOfOrNull { it.unit.convert(it.weight, unit) } ?: return 0
+    return when {
+        current > rec.lastWeight + 0.01 -> 1
+        current < rec.lastWeight - 0.01 -> -1
+        else -> 0
+    }
+}

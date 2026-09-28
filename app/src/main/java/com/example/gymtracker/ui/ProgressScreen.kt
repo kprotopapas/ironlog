@@ -182,11 +182,11 @@ private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, rec: Recommendat
 private fun NextWeightTag(rec: Recommendation, ex: ExerciseProgress, unit: WeightUnit) {
     val (glyph, color) = when (rec.action) {
         WeightAction.INCREASE -> "▲" to Gym.Success
-        WeightAction.HOLD -> "■" to Gym.Dimmer
+        WeightAction.HOLD -> "" to Gym.Dimmer
         WeightAction.DECREASE -> "▼" to Gym.Danger
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(glyph, style = mono(10.sp, color))
+        if (glyph.isNotEmpty()) Text(glyph, style = mono(10.sp, color))
         Text("${formatLoad(ex, rec.nextWeight, unit)} next", style = mono(12.sp, Gym.Muted))
     }
 }

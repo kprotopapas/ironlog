@@ -7,13 +7,13 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.example.gymtracker.data.ActiveWorkout
 import com.example.gymtracker.data.BodyweightEntry
-import com.example.gymtracker.data.ExerciseSet
 import com.example.gymtracker.data.GymStore
 import com.example.gymtracker.data.PresetWorkout
 import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.genId
+import com.example.gymtracker.data.prefilledSets
 import com.example.gymtracker.data.sameDay
 import com.example.gymtracker.data.withBodyweightEquipment
 import com.example.gymtracker.data.withCurrentDefaults
@@ -85,6 +85,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         tab = Tab.LOG
     }
 
+    /** Weights and reps come from each exercise's last session when there is one; see [prefilledSets]. */
     fun startFromPreset(p: PresetWorkout) {
         val exs = p.exercises.map { e ->
             WorkoutExercise(
@@ -93,7 +94,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 category = e.category,
                 equipment = e.equipment,
                 perSide = e.perSide,
-                sets = List(e.defaultSets) { ExerciseSet(e.defaultReps, e.defaultWeight, unit, false) },
+                sets = prefilledSets(e, workouts, unit),
             )
         }
         startWorkout(p.name, exs)

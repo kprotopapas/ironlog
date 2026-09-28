@@ -6,7 +6,10 @@ import com.example.gymtracker.data.WeightAction
 import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.data.PresetExercise
+import com.example.gymtracker.data.prefilledSets
 import com.example.gymtracker.data.recommend
+import com.example.gymtracker.data.weightChange
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -82,5 +85,35 @@ class RecommendationTest {
     fun convertsToDisplayUnit() {
         val r = rec(ex(100.0 to 12, unit = WeightUnit.LBS))
         assertEquals(100.0 / 2.20462262 + 2.5, r.nextWeight, 1e-6)
+    }
+
+    private fun preset(sets: Int = 3) = PresetExercise("Bench Press", "Chest", sets, 10, 40.0, Equipment.BARBELL)
+
+    @Test
+    fun presetWithoutHistoryUsesItsDefaults() {
+        val sets = prefilledSets(preset(), emptyList(), WeightUnit.KG)
+        assertEquals(List(3) { 40.0 to 10 }, sets.map { it.weight to it.reps })
+    }
+
+    @Test
+    fun presetGoesUpAndResetsReps() {
+        val sets = prefilledSets(preset(), history(ex(60.0 to 12, 60.0 to 12, 60.0 to 12)), WeightUnit.KG)
+        assertEquals(List(3) { 62.5 to 8 }, sets.map { it.weight to it.reps })
+    }
+
+    @Test
+    fun presetHoldsWithLastRepsToBeat() {
+        // Four preset sets, three logged: the extra set repeats the last one.
+        val sets = prefilledSets(preset(sets = 4), history(ex(60.0 to 11, 60.0 to 10, 60.0 to 9)), WeightUnit.KG)
+        assertEquals(listOf(11, 10, 9, 9), sets.map { it.reps })
+        assertEquals(List(4) { 60.0 }, sets.map { it.weight })
+    }
+
+    @Test
+    fun changeMarkerOnlyWhenWeightDiffers() {
+        val r = rec(ex(60.0 to 10))
+        assertEquals(0, weightChange(ex(60.0 to 8), r, WeightUnit.KG))
+        assertEquals(1, weightChange(ex(62.5 to 8), r, WeightUnit.KG))
+        assertEquals(-1, weightChange(ex(57.5 to 8), r, WeightUnit.KG))
     }
 }

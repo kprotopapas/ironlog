@@ -50,6 +50,7 @@ import com.example.gymtracker.data.ExerciseSet
 import com.example.gymtracker.data.Recommendation
 import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.recommend
+import com.example.gymtracker.data.weightChange
 import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.formatDuration
@@ -270,7 +271,15 @@ fun ExerciseCard(
         ) {
             CategoryChip(ex.category, Gym.Dim)
             Spacer(Modifier.width(8.dp))
-            Text(ex.name, style = display(17.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f))
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(ex.name, style = display(17.sp, FontWeight.SemiBold), modifier = Modifier.weight(1f, fill = false))
+                // Only a change from last session gets a mark; the same weight shows nothing.
+                when (recommendation?.let { weightChange(ex, it, unit) }) {
+                    1 -> Text("▲", style = mono(11.sp, Gym.Success))
+                    -1 -> Text("▼", style = mono(11.sp, Gym.Danger))
+                    else -> {}
+                }
+            }
             Box(
                 Modifier.size(36.dp).clip(RoundedCornerShape(50)).clickable { collapsed = !collapsed },
                 contentAlignment = Alignment.Center,

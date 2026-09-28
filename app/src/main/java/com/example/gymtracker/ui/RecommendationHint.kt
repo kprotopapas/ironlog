@@ -39,7 +39,7 @@ fun RecommendationHint(
     val next = weightLabel(rec.nextWeight, equipment, unit)
     val (glyph, headline, color) = when (rec.action) {
         WeightAction.INCREASE -> Triple("▲", "Go up to $next", Gym.Success)
-        WeightAction.HOLD -> Triple("■", "Stay at $next", Gym.Dimmer)
+        WeightAction.HOLD -> Triple("", "Stay at $next", Gym.Dimmer)
         WeightAction.DECREASE -> Triple("▼", "Go down to $next", Gym.Danger)
     }
     val why = when (rec.action) {
@@ -52,7 +52,7 @@ fun RecommendationHint(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(glyph, style = mono(10.sp, color))
+        if (glyph.isNotEmpty()) Text(glyph, style = mono(10.sp, color))
         Column(Modifier.weight(1f)) {
             Text(headline, style = body(13.sp, Gym.Foreground, FontWeight.SemiBold))
             Text(
