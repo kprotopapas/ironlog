@@ -48,6 +48,7 @@ import com.example.gymtracker.data.ActiveWorkout
 import com.example.gymtracker.data.Equipment
 import com.example.gymtracker.data.ExerciseSet
 import com.example.gymtracker.data.Recommendation
+import com.example.gymtracker.data.WeightAction
 import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.recommend
 import com.example.gymtracker.data.weightChange
@@ -305,7 +306,8 @@ fun ExerciseCard(
                     onChange = { e, per -> onChange(ex.copy(equipment = e, perSide = per)) },
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
-                recommendation?.let { rec ->
+                // Staying put needs no hint; only a change is worth reading.
+                recommendation?.takeIf { it.action != WeightAction.HOLD }?.let { rec ->
                     val pending = ex.sets.any { !it.done && it.weight != rec.nextWeight }
                     RecommendationHint(
                         rec = rec,

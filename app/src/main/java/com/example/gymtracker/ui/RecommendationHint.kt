@@ -25,7 +25,7 @@ import com.example.gymtracker.ui.theme.Gym
 import kotlin.math.roundToLong
 
 /**
- * "Go up to 62.5 kg — last 60 kg × 12, 12, 12". [onApply], when given, shows a Use button
+ * "Go up to 62.5 kg — last 60 kg × 12, 12, 12". Callers skip [WeightAction.HOLD]: staying needs no hint. [onApply], when given, shows a Use button
  * that puts the suggested weight on the sets still to do.
  */
 @Composable

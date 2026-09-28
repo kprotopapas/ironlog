@@ -172,7 +172,7 @@ private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, rec: Recommendat
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { TrendBadge(ex.trend, ex.changePct) }
-            rec?.let { NextWeightTag(it, ex, unit) }
+            rec?.takeIf { it.action != WeightAction.HOLD }?.let { NextWeightTag(it, ex, unit) }
         }
     }
 }
@@ -259,7 +259,7 @@ private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight
                 }
             }
 
-            rec?.let {
+            rec?.takeIf { it.action != WeightAction.HOLD }?.let {
                 Column {
                     Text("NEXT SESSION · ${TARGET_REPS.first}–${TARGET_REPS.last} REPS", style = SectionLabel, modifier = Modifier.padding(bottom = 8.dp))
                     RecommendationHint(it, ex.equipment, unit)
