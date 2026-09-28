@@ -121,6 +121,11 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
 
     fun discardWorkout() = setActive(null)
 
+    fun updateWorkout(w: Workout) {
+        workouts = workouts.map { if (it.id == w.id) w else it }
+        store.saveWorkouts(workouts)
+    }
+
     fun deleteWorkout(id: String) {
         workouts = workouts.filter { it.id != id }
         store.saveWorkouts(workouts)

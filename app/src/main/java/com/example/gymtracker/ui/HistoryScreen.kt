@@ -39,17 +39,31 @@ import com.example.gymtracker.data.totalVolume
 import com.example.gymtracker.ui.theme.Gym
 
 @Composable
-fun HistoryScreen(workouts: List<Workout>, unit: WeightUnit, onDelete: (String) -> Unit) {
+fun HistoryScreen(workouts: List<Workout>, unit: WeightUnit, onUpdate: (Workout) -> Unit, onDelete: (String) -> Unit) {
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     val sorted = workouts.sortedByDescending { it.date }
     val workout = sorted.find { it.id == selected }
 
+    if (workout != null && editing) {
+        EditWorkoutScreen(
+            workout = workout,
+            unit = unit,
+            onSave = {
+                onUpdate(it)
+                editing = false
+            },
+            onCancel = { editing = false },
+        )
+        return
+    }
     if (workout != null) {
         BackHandler { selected = null }
         WorkoutDetail(
             workout = workout,
             unit = unit,
             onBack = { selected = null },
+            onEdit = { editing = true },
             onDelete = {
                 onDelete(workout.id)
                 selected = null
@@ -109,7 +123,7 @@ fun HistoryScreen(workouts: List<Workout>, unit: WeightUnit, onDelete: (String) 
 }
 
 @Composable
-private fun WorkoutDetail(workout: Workout, unit: WeightUnit, onBack: () -> Unit, onDelete: () -> Unit) {
+private fun WorkoutDetail(workout: Workout, unit: WeightUnit, onBack: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -120,6 +134,13 @@ private fun WorkoutDetail(workout: Workout, unit: WeightUnit, onBack: () -> Unit
                 Text(workout.name, style = display(18.sp, spacing = 0.03.em))
                 Text(formatDate(workout.date), style = mono(12.sp))
             }
+            Text(
+                "Edit",
+                style = body(12.sp, Gym.PrimaryText, FontWeight.Medium),
+                modifier = Modifier
+                    .clickable(onClick = onEdit)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+            )
             Text(
                 "Delete",
                 style = body(12.sp, Gym.Danger),

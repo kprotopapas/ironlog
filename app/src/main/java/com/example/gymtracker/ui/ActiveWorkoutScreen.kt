@@ -241,7 +241,7 @@ fun AddExerciseButton(onClick: () -> Unit) {
 }
 
 @Composable
-private fun ExerciseCard(
+fun ExerciseCard(
     ex: WorkoutExercise,
     unit: WeightUnit,
     onChange: (WorkoutExercise) -> Unit,

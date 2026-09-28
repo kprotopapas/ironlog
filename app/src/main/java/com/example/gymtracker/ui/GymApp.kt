@@ -81,7 +81,7 @@ fun GymApp(vm: GymViewModel) {
                             )
                         }
                     }
-                    Tab.HISTORY -> HistoryScreen(vm.workouts, vm.unit, onDelete = vm::deleteWorkout)
+                    Tab.HISTORY -> HistoryScreen(vm.workouts, vm.unit, onUpdate = vm::updateWorkout, onDelete = vm::deleteWorkout)
                     Tab.PROGRESS -> ProgressScreen(
                         workouts = vm.workouts,
                         bodyweight = vm.bodyweight,
