@@ -65,6 +65,7 @@ fun GymApp(vm: GymViewModel) {
                             ActiveWorkoutScreen(
                                 workout = active,
                                 unit = vm.unit,
+                                history = vm.workouts,
                                 onChange = vm::updateActiveExercises,
                                 onNameChange = vm::renameActiveWorkout,
                                 lastBodyweight = vm.bodyweight.lastOrNull()?.let { it.unit.convert(it.weight, vm.unit) },

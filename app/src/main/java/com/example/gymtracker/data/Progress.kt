@@ -69,7 +69,7 @@ class BodyweightLog(entries: List<BodyweightEntry>, private val unit: WeightUnit
     }
 }
 
-private fun seriesKey(ex: WorkoutExercise) =
+internal fun seriesKey(ex: WorkoutExercise) =
     "${ex.name.trim().lowercase()}|${ex.equipment?.name}|${ex.perSide && ex.equipment?.supportsPerSide == true}"
 
 private class LoggedSet(val date: Long, val load: Double, val logged: Double, val reps: Int, val bodyweight: Double?)

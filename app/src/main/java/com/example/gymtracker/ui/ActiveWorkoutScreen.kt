@@ -47,6 +47,9 @@ import androidx.compose.ui.window.Dialog
 import com.example.gymtracker.data.ActiveWorkout
 import com.example.gymtracker.data.Equipment
 import com.example.gymtracker.data.ExerciseSet
+import com.example.gymtracker.data.Recommendation
+import com.example.gymtracker.data.Workout
+import com.example.gymtracker.data.recommend
 import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.formatDuration
@@ -58,6 +61,7 @@ import kotlinx.coroutines.delay
 fun ActiveWorkoutScreen(
     workout: ActiveWorkout,
     unit: WeightUnit,
+    history: List<Workout>,
     onChange: (List<WorkoutExercise>) -> Unit,
     onNameChange: (String) -> Unit,
     lastBodyweight: Double?,
@@ -157,9 +161,11 @@ fun ActiveWorkoutScreen(
                 }
             }
             itemsIndexed(exercises, key = { _, ex -> ex.id }) { i, ex ->
+                val rec = remember(history, unit, ex.name, ex.equipment, ex.perSide) { recommend(ex, history, unit) }
                 ExerciseCard(
                     ex = ex,
                     unit = unit,
+                    recommendation = rec,
                     onChange = { updated -> onChange(exercises.mapIndexed { j, e -> if (j == i) updated else e }) },
                     onRemove = { onChange(exercises.filterIndexed { j, _ -> j != i }) },
                 )
@@ -246,6 +252,7 @@ fun ExerciseCard(
     unit: WeightUnit,
     onChange: (WorkoutExercise) -> Unit,
     onRemove: () -> Unit,
+    recommendation: Recommendation? = null,
 ) {
     var collapsed by rememberSaveable(ex.id) { mutableStateOf(false) }
     val chevronRotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "chevron")
@@ -289,6 +296,18 @@ fun ExerciseCard(
                     onChange = { e, per -> onChange(ex.copy(equipment = e, perSide = per)) },
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
+                recommendation?.let { rec ->
+                    val pending = ex.sets.any { !it.done && it.weight != rec.nextWeight }
+                    RecommendationHint(
+                        rec = rec,
+                        equipment = ex.equipment,
+                        unit = unit,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        onApply = if (pending) {
+                            { onChange(ex.copy(sets = ex.sets.map { if (it.done) it else it.copy(weight = rec.nextWeight, unit = unit) })) }
+                        } else null,
+                    )
+                }
                 Row(
                     Modifier.padding(start = 13.dp, bottom = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

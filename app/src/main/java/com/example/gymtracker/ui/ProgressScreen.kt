@@ -42,6 +42,11 @@ import com.example.gymtracker.data.BodyweightEntry
 import com.example.gymtracker.data.BodyweightPoint
 import com.example.gymtracker.data.ExerciseProgress
 import com.example.gymtracker.data.ProgressMetric
+import com.example.gymtracker.data.Recommendation
+import com.example.gymtracker.data.TARGET_REPS
+import com.example.gymtracker.data.WeightAction
+import com.example.gymtracker.data.WorkoutExercise
+import com.example.gymtracker.data.recommend
 import com.example.gymtracker.data.SessionBest
 import com.example.gymtracker.data.TREND_WINDOW_DAYS
 import com.example.gymtracker.data.Trend
@@ -78,7 +83,7 @@ fun ProgressScreen(
     }
     progress.find { it.key == selected }?.let { ex ->
         BackHandler { selected = null }
-        ExerciseDetail(ex, unit, hasBodyweight = bwSeries.isNotEmpty(), onBack = { selected = null })
+        ExerciseDetail(ex, unit, hasBodyweight = bwSeries.isNotEmpty(), rec = recommendationFor(ex, workouts, unit), onBack = { selected = null })
         return
     }
 
@@ -104,7 +109,7 @@ fun ProgressScreen(
                 }
             }
             items(progress, key = { it.key }) { ex ->
-                ExerciseRow(ex, unit, onClick = { selected = ex.key })
+                ExerciseRow(ex, unit, rec = recommendationFor(ex, workouts, unit), onClick = { selected = ex.key })
             }
         }
     }
@@ -149,7 +154,7 @@ private fun BodyweightCard(series: List<BodyweightPoint>, unit: WeightUnit, onLo
 }
 
 @Composable
-private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, onClick: () -> Unit) {
+private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, rec: Recommendation?, onClick: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().card().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -165,9 +170,29 @@ private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, onClick: () -> U
             }
             Sparkline(ex.sessions.takeLast(12).map { it.value }, Modifier.size(width = 72.dp, height = 28.dp))
         }
-        TrendBadge(ex.trend, ex.changePct)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { TrendBadge(ex.trend, ex.changePct) }
+            rec?.let { NextWeightTag(it, ex, unit) }
+        }
     }
 }
+
+/** Compact "▲ 62.5 kg next" for list rows; the detail view explains why. */
+@Composable
+private fun NextWeightTag(rec: Recommendation, ex: ExerciseProgress, unit: WeightUnit) {
+    val (glyph, color) = when (rec.action) {
+        WeightAction.INCREASE -> "▲" to Gym.Success
+        WeightAction.HOLD -> "■" to Gym.Dimmer
+        WeightAction.DECREASE -> "▼" to Gym.Danger
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(glyph, style = mono(10.sp, color))
+        Text("${formatLoad(ex, rec.nextWeight, unit)} next", style = mono(12.sp, Gym.Muted))
+    }
+}
+
+private fun recommendationFor(ex: ExerciseProgress, workouts: List<Workout>, unit: WeightUnit): Recommendation? =
+    recommend(WorkoutExercise("", ex.name, ex.category, emptyList(), equipment = ex.equipment, perSide = ex.perSide), workouts, unit)
 
 /** Status glyph in the status color, label in text color, so state never rides on color alone. */
 @Composable
@@ -188,7 +213,7 @@ private fun TrendBadge(trend: Trend, changePct: Double?) {
 // ─── Exercise detail ─────────────────────────────────────────────────────────
 
 @Composable
-private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight: Boolean, onBack: () -> Unit) {
+private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight: Boolean, rec: Recommendation?, onBack: () -> Unit) {
     val canBeRelative = ex.metric == ProgressMetric.E1RM && hasBodyweight
     var relative by rememberSaveable(ex.key) { mutableStateOf(false) }
     val showRelative = relative && canBeRelative
@@ -231,6 +256,13 @@ private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight
                         ToggleSegment(unit.label, selected = !showRelative) { relative = false }
                         ToggleSegment("× BW", selected = showRelative) { relative = true }
                     }
+                }
+            }
+
+            rec?.let {
+                Column {
+                    Text("NEXT SESSION · ${TARGET_REPS.first}–${TARGET_REPS.last} REPS", style = SectionLabel, modifier = Modifier.padding(bottom = 8.dp))
+                    RecommendationHint(it, ex.equipment, unit)
                 }
             }
 
