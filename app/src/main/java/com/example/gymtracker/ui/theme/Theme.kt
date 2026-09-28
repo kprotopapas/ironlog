@@ -26,6 +26,7 @@ object Gym {
     val InputBorder = Color(0xFFCBD5E1) // slate-300
     val PrimaryDashed = Color(0xFF93C5FD) // blue-300
     val Danger = Color(0xFFDC2626) // red-600, 4.8:1
+    val Success = Color(0xFF15803D) // green-700, 5.0:1
     val Muted = Color(0xFF475569) // slate-600, 7.6:1
     val Dim = Color(0xFF475569)
     val Dimmer = Color(0xFF64748B) // slate-500, 4.8:1

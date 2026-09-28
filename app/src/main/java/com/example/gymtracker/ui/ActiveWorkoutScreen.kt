@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.gymtracker.data.ActiveWorkout
 import com.example.gymtracker.data.Equipment
 import com.example.gymtracker.data.ExerciseSet
@@ -58,10 +60,12 @@ fun ActiveWorkoutScreen(
     unit: WeightUnit,
     onChange: (List<WorkoutExercise>) -> Unit,
     onNameChange: (String) -> Unit,
-    onFinish: () -> Unit,
+    lastBodyweight: Double?,
+    onFinish: (bodyweightToday: Double?) -> Unit,
     onDiscard: () -> Unit,
 ) {
     var showPicker by rememberSaveable { mutableStateOf(false) }
+    var confirmFinish by rememberSaveable { mutableStateOf(false) }
     val exercises = workout.exercises
     val allSets = exercises.flatMap { it.sets }
     val doneSets = allSets.count { it.done }
@@ -135,7 +139,7 @@ fun ActiveWorkoutScreen(
                             .clickable(onClick = onDiscard)
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
-                    PrimaryButton("Finish", onClick = onFinish)
+                    PrimaryButton("Finish", onClick = { confirmFinish = true })
                 }
             }
         }
@@ -167,6 +171,56 @@ fun ActiveWorkoutScreen(
     }
 
     if (showPicker) ExercisePicker(onSelect = ::addExercise, onClose = { showPicker = false })
+    if (confirmFinish) {
+        FinishDialog(
+            lastBodyweight = lastBodyweight,
+            unit = unit,
+            onFinish = {
+                confirmFinish = false
+                onFinish(it)
+            },
+            onDismiss = { confirmFinish = false },
+        )
+    }
+}
+
+/** Confirms finishing, with an optional weigh-in prefilled from the last one. */
+@Composable
+private fun FinishDialog(lastBodyweight: Double?, unit: WeightUnit, onFinish: (Double?) -> Unit, onDismiss: () -> Unit) {
+    var weight by remember { mutableDoubleStateOf(lastBodyweight ?: 0.0) }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().card(background = Gym.Background).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Finish workout?", style = display(22.sp))
+            Text("Bodyweight today (optional)", style = mono(12.sp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField(value = weight, onValueChange = { weight = it }, modifier = Modifier.width(72.dp))
+                Text(unit.label, style = body(12.sp, Gym.Faint))
+            }
+            Text(
+                "Counts as load on pull-ups and other bodyweight exercises.",
+                style = body(12.sp, Gym.Dim),
+            )
+            Row(
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Finish without",
+                    style = body(12.sp, Gym.Dimmer),
+                    modifier = Modifier
+                        .clip(SmallShape)
+                        .border(1.dp, Gym.CardBorder, SmallShape)
+                        .clickable { onFinish(null) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+                PrimaryButton("Log & finish", onClick = { if (weight > 0) onFinish(weight) }, enabled = weight > 0)
+            }
+        }
+    }
 }
 
 @Composable
@@ -240,7 +294,12 @@ private fun ExerciseCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Spacer(Modifier.width(20.dp))
-                    Text("Weight", style = mono(12.sp, Gym.Faint), textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
+                    Text(
+                        if (ex.equipment?.isBodyweight == true) "Added" else "Weight",
+                        style = mono(12.sp, Gym.Faint),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.width(56.dp),
+                    )
                     Spacer(Modifier.width(if (unit == WeightUnit.KG) 28.dp else 33.dp))
                     Text("Reps", style = mono(12.sp, Gym.Faint), textAlign = TextAlign.Center, modifier = Modifier.width(44.dp))
                 }

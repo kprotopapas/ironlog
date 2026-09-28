@@ -21,6 +21,13 @@ class GymStore(context: Context) {
     fun savePresets(presets: List<PresetWorkout>) =
         prefs.edit { putString(KEY_PRESETS, JSONArray(presets.map { it.toJson() }).toString()) }
 
+    fun loadBodyweight(): List<BodyweightEntry> = readArray(KEY_BODYWEIGHT).mapObjects { it.toBodyweightEntry() }
+    fun saveBodyweight(entries: List<BodyweightEntry>) =
+        prefs.edit { putString(KEY_BODYWEIGHT, JSONArray(entries.map { it.toJson() }).toString()) }
+
+    fun isMigrated(name: String) = prefs.getBoolean("$KEY_MIGRATION_PREFIX$name", false)
+    fun setMigrated(name: String) = prefs.edit { putBoolean("$KEY_MIGRATION_PREFIX$name", true) }
+
     fun loadActiveWorkout(): ActiveWorkout? = prefs.getString(KEY_ACTIVE, null)?.let {
         try {
             JSONObject(it).toActiveWorkout()
@@ -46,5 +53,7 @@ class GymStore(context: Context) {
         const val KEY_WORKOUTS = "gym-workouts"
         const val KEY_PRESETS = "gym-presets"
         const val KEY_ACTIVE = "gym-active-workout"
+        const val KEY_BODYWEIGHT = "gym-bodyweight"
+        const val KEY_MIGRATION_PREFIX = "gym-migrated-"
     }
 }

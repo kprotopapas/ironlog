@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.example.gymtracker.data.ActiveWorkout
+import com.example.gymtracker.data.BodyweightEntry
 import com.example.gymtracker.data.ExerciseSet
 import com.example.gymtracker.data.GymStore
 import com.example.gymtracker.data.PresetWorkout
@@ -13,8 +14,10 @@ import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.genId
+import com.example.gymtracker.data.sameDay
+import com.example.gymtracker.data.withBodyweightEquipment
 
-enum class Tab(val label: String) { LOG("Log"), HISTORY("History"), PRESETS("Presets") }
+enum class Tab(val label: String) { LOG("Log"), HISTORY("History"), PROGRESS("Progress"), PRESETS("Presets") }
 
 class GymViewModel(app: Application) : AndroidViewModel(app) {
     private val store = GymStore(app)
@@ -30,9 +33,24 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
     var presets by mutableStateOf(store.loadPresets())
         private set
 
+    var bodyweight by mutableStateOf(store.loadBodyweight())
+        private set
+
     /** Unlike the web version, this is persisted so a workout survives the app being killed. */
     var activeWorkout by mutableStateOf(store.loadActiveWorkout())
         private set
+
+    init {
+        // One-off: pull-ups and dips logged before the Bodyweight equipment type existed.
+        if (!store.isMigrated(MIGRATION_BODYWEIGHT)) {
+            workouts = workouts.map { w -> w.copy(exercises = w.exercises.map { it.withBodyweightEquipment() }) }
+            presets = presets.map { p -> p.copy(exercises = p.exercises.map { it.withBodyweightEquipment() }) }
+            activeWorkout?.let { a -> setActive(a.copy(exercises = a.exercises.map { it.withBodyweightEquipment() })) }
+            store.saveWorkouts(workouts)
+            store.savePresets(presets)
+            store.setMigrated(MIGRATION_BODYWEIGHT)
+        }
+    }
 
     fun toggleUnit() {
         unit = unit.toggled()
@@ -71,9 +89,23 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         startWorkout(p.name, exs)
     }
 
-    fun finishWorkout() {
+    /** Logs a weigh-in in the current unit, replacing any earlier one from the same day. */
+    fun logBodyweight(weight: Double, date: Long = System.currentTimeMillis()) {
+        if (weight <= 0) return
+        bodyweight = (bodyweight.filterNot { sameDay(it.date, date) } + BodyweightEntry(date, weight, unit))
+            .sortedBy { it.date }
+        store.saveBodyweight(bodyweight)
+    }
+
+    fun deleteBodyweight(date: Long) {
+        bodyweight = bodyweight.filter { it.date != date }
+        store.saveBodyweight(bodyweight)
+    }
+
+    fun finishWorkout(bodyweightToday: Double? = null) {
         val active = activeWorkout ?: return
         val now = System.currentTimeMillis()
+        bodyweightToday?.let { logBodyweight(it, now) }
         val w = Workout(
             id = genId(),
             name = active.name.ifEmpty { "Workout" },
@@ -104,3 +136,5 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
         store.savePresets(presets)
     }
 }
+
+private const val MIGRATION_BODYWEIGHT = "bodyweight-equipment"

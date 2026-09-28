@@ -15,13 +15,24 @@ enum class WeightUnit(val label: String) {
 
     fun toggled() = if (this == KG) LBS else KG
 
+    /** Converts [value], expressed in this unit, to [target]. */
+    fun convert(value: Double, target: WeightUnit): Double = when {
+        this == target -> value
+        this == KG -> value * LBS_PER_KG
+        else -> value / LBS_PER_KG
+    }
+
     companion object {
         fun fromLabel(s: String?) = entries.firstOrNull { it.label == s } ?: KG
+        private const val LBS_PER_KG = 2.20462262
     }
 }
 
 enum class Equipment(val label: String) {
-    BARBELL("Barbell"), DUMBBELL("Dumbbell"), CABLE("Cable"), SMITH("Smith machine");
+    BARBELL("Barbell"), DUMBBELL("Dumbbell"), CABLE("Cable"), SMITH("Smith machine"), BODYWEIGHT("Bodyweight");
+
+    /** For bodyweight exercises the logged weight is added load (belt, vest) on top of bodyweight. */
+    val isBodyweight get() = this == BODYWEIGHT
 
     /** Only one-handed implements can be loaded per side (arm or leg); bars are always total. */
     val supportsPerSide get() = this == DUMBBELL || this == CABLE
@@ -43,6 +54,12 @@ data class ExerciseSet(
     val weight: Double,
     val unit: WeightUnit,
     val done: Boolean,
+)
+
+data class BodyweightEntry(
+    val date: Long, // epoch millis
+    val weight: Double,
+    val unit: WeightUnit,
 )
 
 data class WorkoutExercise(
@@ -98,9 +115,9 @@ val EXERCISE_LIBRARY = listOf(
     LibraryExercise("Bench Press", "Chest", Equipment.BARBELL),
     LibraryExercise("Incline Dumbbell Press", "Chest", Equipment.DUMBBELL),
     LibraryExercise("Cable Fly", "Chest", Equipment.CABLE),
-    LibraryExercise("Dips", "Chest"),
+    LibraryExercise("Dips", "Chest", Equipment.BODYWEIGHT),
     LibraryExercise("Deadlift", "Back", Equipment.BARBELL),
-    LibraryExercise("Pull-ups", "Back"),
+    LibraryExercise("Pull-ups", "Back", Equipment.BODYWEIGHT),
     LibraryExercise("Barbell Row", "Back", Equipment.BARBELL),
     LibraryExercise("Lat Pulldown", "Back", Equipment.CABLE),
     LibraryExercise("Cable Row", "Back", Equipment.CABLE),
@@ -118,6 +135,24 @@ val EXERCISE_LIBRARY = listOf(
 
 val CATEGORIES = listOf("All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core")
 
+private val BODYWEIGHT_EXERCISES = EXERCISE_LIBRARY
+    .filter { it.equipment == Equipment.BODYWEIGHT }
+    .map { it.name.lowercase() }
+    .toSet()
+
+/**
+ * Entries logged before the Bodyweight equipment existed have no equipment. Only unloaded ones
+ * (weight 0) are upgraded; a non-zero weight might be bodyweight typed in, which would double-count.
+ */
+private fun needsBodyweight(name: String, equipment: Equipment?, weights: List<Double>) =
+    equipment == null && name.trim().lowercase() in BODYWEIGHT_EXERCISES && weights.all { it == 0.0 }
+
+fun WorkoutExercise.withBodyweightEquipment() =
+    if (needsBodyweight(name, equipment, sets.map { it.weight })) copy(equipment = Equipment.BODYWEIGHT, perSide = false) else this
+
+fun PresetExercise.withBodyweightEquipment() =
+    if (needsBodyweight(name, equipment, listOf(defaultWeight))) copy(equipment = Equipment.BODYWEIGHT, perSide = false) else this
+
 fun genId(): String = UUID.randomUUID().toString().take(8)
 
 // ─── Formatting ──────────────────────────────────────────────────────────────
@@ -132,6 +167,9 @@ fun formatDuration(sec: Long): String {
         else -> "${s}s"
     }
 }
+
+fun formatShortDate(epochMillis: Long): String =
+    SimpleDateFormat("MMM d", Locale.US).format(Date(epochMillis))
 
 fun formatDate(epochMillis: Long): String =
     SimpleDateFormat("EEE, MMM d", Locale.US).format(Date(epochMillis))
@@ -151,6 +189,15 @@ fun totalVolume(exercises: List<WorkoutExercise>): Double =
     }
 
 // ─── JSON ────────────────────────────────────────────────────────────────────
+
+fun BodyweightEntry.toJson(): JSONObject = JSONObject()
+    .put("date", date).put("weight", weight).put("unit", unit.label)
+
+fun JSONObject.toBodyweightEntry() = BodyweightEntry(
+    date = optLong("date"),
+    weight = optDouble("weight", 0.0),
+    unit = WeightUnit.fromLabel(optString("unit")),
+)
 
 private fun ExerciseSet.toJson() = JSONObject()
     .put("reps", reps).put("weight", weight).put("unit", unit.label).put("done", done)

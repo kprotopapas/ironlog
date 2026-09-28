@@ -67,6 +67,7 @@ fun GymApp(vm: GymViewModel) {
                                 unit = vm.unit,
                                 onChange = vm::updateActiveExercises,
                                 onNameChange = vm::renameActiveWorkout,
+                                lastBodyweight = vm.bodyweight.lastOrNull()?.let { it.unit.convert(it.weight, vm.unit) },
                                 onFinish = vm::finishWorkout,
                                 onDiscard = vm::discardWorkout,
                             )
@@ -81,6 +82,13 @@ fun GymApp(vm: GymViewModel) {
                         }
                     }
                     Tab.HISTORY -> HistoryScreen(vm.workouts, vm.unit, onDelete = vm::deleteWorkout)
+                    Tab.PROGRESS -> ProgressScreen(
+                        workouts = vm.workouts,
+                        bodyweight = vm.bodyweight,
+                        unit = vm.unit,
+                        onLogBodyweight = { vm.logBodyweight(it) },
+                        onDeleteBodyweight = vm::deleteBodyweight,
+                    )
                     Tab.PRESETS -> PresetsScreen(
                         presets = vm.presets,
                         onSave = vm::savePreset,
@@ -140,6 +148,6 @@ private fun NavTab(label: String, active: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .clickable(onClick = onClick)
             .then(if (active) Modifier.underline(Gym.Primary, 2.dp) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     )
 }
