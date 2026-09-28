@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.example.gymtracker.data.BodyweightEntry
+import com.example.gymtracker.data.CATEGORIES
+import com.example.gymtracker.data.DAY_MILLIS
+import com.example.gymtracker.data.groupSuggestion
 import com.example.gymtracker.data.BodyweightPoint
 import com.example.gymtracker.data.ExerciseProgress
 import com.example.gymtracker.data.ProgressMetric
@@ -59,6 +64,7 @@ import com.example.gymtracker.data.equipmentSummary
 import com.example.gymtracker.data.formatDate
 import com.example.gymtracker.data.formatWeight
 import com.example.gymtracker.ui.theme.Gym
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
@@ -75,6 +81,18 @@ fun ProgressScreen(
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val progress = remember(workouts, bodyweight, unit) { computeProgress(workouts, bodyweight, unit) }
     val bwSeries = remember(bodyweight, unit) { bodyweightSeries(bodyweight, unit) }
+    val recs = remember(progress, workouts, unit) { progress.associate { it.key to recommendationFor(it, workouts, unit) } }
+    val sections = remember(progress) { byCategory(progress) }
+    // Only exercises trained recently count towards a muscle group's call.
+    val changes = remember(progress, recs) {
+        val since = System.currentTimeMillis() - TREND_WINDOW_DAYS * DAY_MILLIS
+        progress.filter { it.latest.date >= since }
+            .groupBy { it.category }
+            .mapValues { (_, exs) -> exs.mapNotNull { recs[it.key]?.action } }
+    }
+    val zones = remember(changes) { changes.mapNotNull { (cat, actions) -> groupSuggestion(actions)?.let { cat to it } }.toMap() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     if (selected == BODYWEIGHT_KEY) {
         BackHandler { selected = null }
@@ -83,12 +101,13 @@ fun ProgressScreen(
     }
     progress.find { it.key == selected }?.let { ex ->
         BackHandler { selected = null }
-        ExerciseDetail(ex, unit, hasBodyweight = bwSeries.isNotEmpty(), rec = recommendationFor(ex, workouts, unit), onBack = { selected = null })
+        ExerciseDetail(ex, unit, hasBodyweight = bwSeries.isNotEmpty(), rec = recs[ex.key], onBack = { selected = null })
         return
     }
 
     LazyColumn(
         Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -103,14 +122,80 @@ fun ProgressScreen(
             item { EmptyState("📈", "Finish a few workouts with completed sets\nto see your trends") }
         } else {
             item {
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.padding(top = 8.dp)) {
+                    Text("NEXT SESSION", style = SectionLabel, modifier = Modifier.padding(bottom = 12.dp))
+                    BodyDiagram(
+                        states = zones,
+                        onSelect = { cat ->
+                            val index = sectionIndex(sections, cat) ?: return@BodyDiagram
+                            scope.launch { listState.animateScrollToItem(index) }
+                        },
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("▲", style = mono(10.sp, Gym.Success))
+                        Text("go up", style = mono(12.sp, Gym.Dim))
+                        Text("▼", style = mono(10.sp, Gym.Danger), modifier = Modifier.padding(start = 8.dp))
+                        Text("go down", style = mono(12.sp, Gym.Dim))
+                        Text("· tap a muscle", style = mono(12.sp, Gym.Faint), modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("EXERCISES", style = SectionLabel, modifier = Modifier.weight(1f))
                     Text("Trend · last ${TREND_WINDOW_DAYS / 7} wks", style = mono(12.sp, Gym.Faint))
                 }
             }
-            items(progress, key = { it.key }) { ex ->
-                ExerciseRow(ex, unit, rec = recommendationFor(ex, workouts, unit), onClick = { selected = ex.key })
+            sections.forEach { (category, exercises) ->
+                item(key = "section-$category") { CategoryHeader(category, changes[category].orEmpty()) }
+                items(exercises, key = { it.key }) { ex ->
+                    ExerciseRow(ex, unit, rec = recs[ex.key], onClick = { selected = ex.key })
+                }
             }
+        }
+    }
+}
+
+/** Items above the first category section: intro, body diagram, "Exercises" label. */
+private const val ITEMS_BEFORE_SECTIONS = 3
+
+private fun sectionIndex(sections: List<Pair<String, List<ExerciseProgress>>>, category: String): Int? {
+    var index = ITEMS_BEFORE_SECTIONS
+    for ((cat, exercises) in sections) {
+        if (cat == category) return index
+        index += 1 + exercises.size
+    }
+    return null
+}
+
+/** Sections in the app's category order; any custom category goes last, alphabetically. */
+private fun byCategory(progress: List<ExerciseProgress>): List<Pair<String, List<ExerciseProgress>>> {
+    val order = CATEGORIES.drop(1) // skip "All"
+    return progress.groupBy { it.category }.toList()
+        .sortedWith(compareBy({ order.indexOf(it.first).let { i -> if (i < 0) order.size else i } }, { it.first }))
+}
+
+@Composable
+private fun CategoryHeader(category: String, actions: List<WeightAction>) {
+    val up = actions.count { it == WeightAction.INCREASE }
+    val down = actions.count { it == WeightAction.DECREASE }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(category.uppercase(), style = SectionLabel.copy(color = Gym.Muted, fontWeight = FontWeight.SemiBold))
+        if (up > 0) {
+            Text("· $up", style = mono(12.sp, Gym.Dim))
+            Text("▲", style = mono(10.sp, Gym.Success))
+        }
+        if (down > 0) {
+            Text("· $down", style = mono(12.sp, Gym.Dim))
+            Text("▼", style = mono(10.sp, Gym.Danger))
         }
     }
 }

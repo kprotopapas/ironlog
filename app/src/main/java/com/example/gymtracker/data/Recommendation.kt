@@ -93,3 +93,14 @@ fun weightChange(exercise: WorkoutExercise, rec: Recommendation, unit: WeightUni
         else -> 0
     }
 }
+
+/** A muscle group's overall call: whichever of up or down its exercises suggest more often; null on a tie or none. */
+fun groupSuggestion(actions: List<WeightAction>): WeightAction? {
+    val up = actions.count { it == WeightAction.INCREASE }
+    val down = actions.count { it == WeightAction.DECREASE }
+    return when {
+        up > down -> WeightAction.INCREASE
+        down > up -> WeightAction.DECREASE
+        else -> null
+    }
+}
