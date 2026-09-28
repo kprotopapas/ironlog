@@ -16,6 +16,8 @@ import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.genId
 import com.example.gymtracker.data.sameDay
 import com.example.gymtracker.data.withBodyweightEquipment
+import com.example.gymtracker.data.withCurrentDefaults
+import com.example.gymtracker.data.withCurrentName
 
 enum class Tab(val label: String) { LOG("Log"), HISTORY("History"), PROGRESS("Progress"), PRESETS("Presets") }
 
@@ -49,6 +51,14 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
             store.saveWorkouts(workouts)
             store.savePresets(presets)
             store.setMigrated(MIGRATION_BODYWEIGHT)
+        }
+        if (!store.isMigrated(MIGRATION_NAMES)) {
+            workouts = workouts.map { w -> w.copy(exercises = w.exercises.map { it.withCurrentName() }) }
+            presets = presets.map { p -> p.copy(exercises = p.exercises.map { it.withCurrentDefaults() }) }
+            activeWorkout?.let { a -> setActive(a.copy(exercises = a.exercises.map { it.withCurrentName() })) }
+            store.saveWorkouts(workouts)
+            store.savePresets(presets)
+            store.setMigrated(MIGRATION_NAMES)
         }
     }
 
@@ -143,3 +153,4 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private const val MIGRATION_BODYWEIGHT = "bodyweight-equipment"
+private const val MIGRATION_NAMES = "equipment-free-names"

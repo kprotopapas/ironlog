@@ -29,7 +29,7 @@ enum class WeightUnit(val label: String) {
 }
 
 enum class Equipment(val label: String) {
-    BARBELL("Barbell"), DUMBBELL("Dumbbell"), CABLE("Cable"), SMITH("Smith machine"), BODYWEIGHT("Bodyweight");
+    BARBELL("Barbell"), DUMBBELL("Dumbbell"), CABLE("Cable"), SMITH("Smith machine"), MACHINE("Machine"), BODYWEIGHT("Bodyweight");
 
     /** For bodyweight exercises the logged weight is added load (belt, vest) on top of bodyweight. */
     val isBodyweight get() = this == BODYWEIGHT
@@ -106,32 +106,72 @@ data class ActiveWorkout(
 
 data class LibraryExercise(val name: String, val category: String, val equipment: Equipment? = null)
 
+// Names describe the movement only; the equipment is picked in the dropdown and these are just defaults.
 val EXERCISE_LIBRARY = listOf(
-    LibraryExercise("Barbell Back Squat", "Legs", Equipment.BARBELL),
+    LibraryExercise("Squat", "Legs", Equipment.BARBELL),
     LibraryExercise("Romanian Deadlift", "Legs", Equipment.BARBELL),
-    LibraryExercise("Leg Press", "Legs"),
-    LibraryExercise("Lunges", "Legs"),
-    LibraryExercise("Leg Curl", "Legs"),
+    LibraryExercise("Leg Press", "Legs", Equipment.MACHINE),
+    LibraryExercise("Lunges", "Legs", Equipment.DUMBBELL),
+    LibraryExercise("Leg Curl", "Legs", Equipment.MACHINE),
+    LibraryExercise("Hip Thrust", "Legs", Equipment.BARBELL),
+    LibraryExercise("Calf Raises", "Legs", Equipment.SMITH),
     LibraryExercise("Bench Press", "Chest", Equipment.BARBELL),
-    LibraryExercise("Incline Dumbbell Press", "Chest", Equipment.DUMBBELL),
-    LibraryExercise("Cable Fly", "Chest", Equipment.CABLE),
+    LibraryExercise("Incline Press", "Chest", Equipment.DUMBBELL),
+    LibraryExercise("Chest Fly", "Chest", Equipment.CABLE),
     LibraryExercise("Dips", "Chest", Equipment.BODYWEIGHT),
     LibraryExercise("Deadlift", "Back", Equipment.BARBELL),
     LibraryExercise("Pull-ups", "Back", Equipment.BODYWEIGHT),
-    LibraryExercise("Barbell Row", "Back", Equipment.BARBELL),
+    LibraryExercise("Bent-over Row", "Back", Equipment.BARBELL),
     LibraryExercise("Lat Pulldown", "Back", Equipment.CABLE),
-    LibraryExercise("Cable Row", "Back", Equipment.CABLE),
+    LibraryExercise("Low Row", "Back", Equipment.CABLE),
     LibraryExercise("Overhead Press", "Shoulders", Equipment.BARBELL),
     LibraryExercise("Lateral Raise", "Shoulders", Equipment.DUMBBELL),
     LibraryExercise("Face Pull", "Shoulders", Equipment.CABLE),
-    LibraryExercise("Barbell Curl", "Arms", Equipment.BARBELL),
+    LibraryExercise("Rear Delt", "Shoulders", Equipment.CABLE),
+    LibraryExercise("Shrugs", "Shoulders", Equipment.DUMBBELL),
+    LibraryExercise("Curl", "Arms", Equipment.CABLE),
     LibraryExercise("Hammer Curl", "Arms", Equipment.DUMBBELL),
+    LibraryExercise("Preacher Curl", "Arms", Equipment.DUMBBELL),
     LibraryExercise("Tricep Pushdown", "Arms", Equipment.CABLE),
     LibraryExercise("Skull Crushers", "Arms", Equipment.BARBELL),
-    LibraryExercise("Plank", "Core"),
-    LibraryExercise("Cable Crunch", "Core", Equipment.CABLE),
-    LibraryExercise("Hanging Leg Raise", "Core"),
+    LibraryExercise("Plank", "Core", Equipment.BODYWEIGHT),
+    LibraryExercise("Crunch", "Core", Equipment.CABLE),
+    LibraryExercise("Hanging Leg Raise", "Core", Equipment.BODYWEIGHT),
+    LibraryExercise("Dragon Flag", "Core", Equipment.BODYWEIGHT),
 )
+
+/** Old library names that had the equipment baked in. */
+private val RENAMED_EXERCISES = mapOf(
+    "barbell back squat" to "Squat",
+    "incline dumbbell press" to "Incline Press",
+    "cable fly" to "Chest Fly",
+    "barbell row" to "Bent-over Row",
+    "cable row" to "Low Row",
+    "barbell curl" to "Curl",
+    "cable crunch" to "Crunch",
+)
+
+private fun renamed(name: String) = RENAMED_EXERCISES[name.trim().lowercase()]
+
+private fun libraryEntry(name: String) = EXERCISE_LIBRARY.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+
+/** Logged history keeps the equipment it was done with; only the name changes. */
+fun WorkoutExercise.withCurrentName() = renamed(name)?.let { copy(name = it) } ?: this
+
+/**
+ * Presets are defaults, so a renamed exercise takes the library's equipment (the old name implied
+ * the old equipment), and an exercise without equipment picks up the library's default.
+ */
+fun PresetExercise.withCurrentDefaults(): PresetExercise {
+    val newName = renamed(name)
+    val default = libraryEntry(newName ?: name)?.equipment?.takeIf { newName != null || equipment == null }
+    return copy(
+        name = newName ?: name,
+        equipment = default ?: equipment,
+        perSide = default?.defaultPerSide ?: perSide,
+    )
+}
+
 
 val CATEGORIES = listOf("All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core")
 
