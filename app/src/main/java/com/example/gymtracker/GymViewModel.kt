@@ -111,7 +111,7 @@ class GymViewModel(app: Application) : AndroidViewModel(app) {
                 category = e.category,
                 equipment = e.equipment,
                 perSide = e.perSide,
-                sets = prefilledSets(e, workouts, unit),
+                sets = prefilledSets(e, workouts, unit, bodyweight),
             )
         }
         startWorkout(p.name, exs)

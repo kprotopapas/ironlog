@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.gymtracker.data.Equipment
 import com.example.gymtracker.data.Recommendation
-import com.example.gymtracker.data.TARGET_REPS
 import com.example.gymtracker.data.WeightAction
 import com.example.gymtracker.data.WeightUnit
 import com.example.gymtracker.data.formatShortDate
@@ -25,8 +24,8 @@ import com.example.gymtracker.ui.theme.Gym
 import kotlin.math.roundToLong
 
 /**
- * "Go up to 62.5 kg — last 60 kg × 12, 12, 12". Callers skip [WeightAction.HOLD]: staying needs no hint. [onApply], when given, shows a Use button
- * that puts the suggested weight on the sets still to do.
+ * "Go up to 62.5 kg — Oct 15: best 60 kg × 12". Callers skip [WeightAction.HOLD]: staying needs no hint. [onApply], when given,
+ * shows a Use button that puts the suggested weights on the sets still to do.
  */
 @Composable
 fun RecommendationHint(
@@ -36,17 +35,19 @@ fun RecommendationHint(
     modifier: Modifier = Modifier,
     onApply: (() -> Unit)? = null,
 ) {
-    val next = weightLabel(rec.nextWeight, equipment, unit)
+    // Sets at different weights (a pyramid) all move a step; name the top one.
+    val next = weightLabel(rec.nextWeight, equipment, unit) + if (rec.nextSets.distinctBy { it.weight }.size > 1) " top set" else ""
     val (glyph, headline, color) = when (rec.action) {
         WeightAction.INCREASE -> Triple("▲", "Go up to $next", Gym.Success)
         WeightAction.HOLD -> Triple("", "Stay at $next", Gym.Dimmer)
         WeightAction.DECREASE -> Triple("▼", "Go down to $next", Gym.Danger)
     }
     val why = when (rec.action) {
-        WeightAction.INCREASE -> "every set hit ${TARGET_REPS.last}"
-        WeightAction.HOLD -> "add reps until every set hits ${TARGET_REPS.last}"
-        WeightAction.DECREASE -> "under ${TARGET_REPS.first} reps"
+        WeightAction.INCREASE -> "beat your recent best"
+        WeightAction.HOLD -> "beat these reps"
+        WeightAction.DECREASE -> "well under your best twice"
     }
+    val best = rec.bestSet
     Row(
         modifier.fillMaxWidth().clip(SmallShape).background(Gym.Surface).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -56,7 +57,7 @@ fun RecommendationHint(
         Column(Modifier.weight(1f)) {
             Text(headline, style = body(13.sp, Gym.Foreground, FontWeight.SemiBold))
             Text(
-                "${formatShortDate(rec.lastDate)}: ${weightLabel(rec.lastWeight, equipment, unit)} × ${rec.lastReps.joinToString(", ")} · $why",
+                "${formatShortDate(rec.lastDate)}: best ${weightLabel(best.weight, equipment, unit)} × ${best.reps} · $why",
                 style = mono(11.sp, Gym.Dim),
             )
         }

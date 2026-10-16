@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.gymtracker.data.ActiveWorkout
+import com.example.gymtracker.data.BodyweightEntry
 import com.example.gymtracker.data.Equipment
 import com.example.gymtracker.data.ExerciseSet
 import com.example.gymtracker.data.Recommendation
@@ -64,6 +65,7 @@ fun ActiveWorkoutScreen(
     workout: ActiveWorkout,
     unit: WeightUnit,
     history: List<Workout>,
+    bodyweight: List<BodyweightEntry>,
     onChange: (List<WorkoutExercise>) -> Unit,
     onNameChange: (String) -> Unit,
     lastBodyweight: Double?,
@@ -163,7 +165,7 @@ fun ActiveWorkoutScreen(
                 }
             }
             itemsIndexed(exercises, key = { _, ex -> ex.id }) { i, ex ->
-                val rec = remember(history, unit, ex.name, ex.equipment, ex.perSide) { recommend(ex, history, unit) }
+                val rec = remember(history, bodyweight, unit, ex.name, ex.equipment, ex.perSide) { recommend(ex, history, unit, bodyweight) }
                 ExerciseCard(
                     ex = ex,
                     unit = unit,
@@ -308,14 +310,14 @@ fun ExerciseCard(
                 )
                 // Staying put needs no hint; only a change is worth reading.
                 recommendation?.takeIf { it.action != WeightAction.HOLD }?.let { rec ->
-                    val pending = ex.sets.any { !it.done && it.weight != rec.nextWeight }
+                    val pending = ex.sets.withIndex().any { (i, s) -> !s.done && s.weight != rec.nextWeightFor(i) }
                     RecommendationHint(
                         rec = rec,
                         equipment = ex.equipment,
                         unit = unit,
                         modifier = Modifier.padding(bottom = 4.dp),
                         onApply = if (pending) {
-                            { onChange(ex.copy(sets = ex.sets.map { if (it.done) it else it.copy(weight = rec.nextWeight, unit = unit) })) }
+                            { onChange(ex.copy(sets = ex.sets.mapIndexed { i, s -> if (s.done) s else s.copy(weight = rec.nextWeightFor(i), unit = unit) })) }
                         } else null,
                     )
                 }

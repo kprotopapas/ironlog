@@ -48,7 +48,6 @@ import com.example.gymtracker.data.BodyweightPoint
 import com.example.gymtracker.data.ExerciseProgress
 import com.example.gymtracker.data.ProgressMetric
 import com.example.gymtracker.data.Recommendation
-import com.example.gymtracker.data.TARGET_REPS
 import com.example.gymtracker.data.WeightAction
 import com.example.gymtracker.data.WorkoutExercise
 import com.example.gymtracker.data.recommend
@@ -80,7 +79,7 @@ fun ProgressScreen(
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val progress = remember(workouts, bodyweight, unit) { computeProgress(workouts, bodyweight, unit) }
     val bwSeries = remember(bodyweight, unit) { bodyweightSeries(bodyweight, unit) }
-    val recs = remember(progress, workouts, unit) { progress.associate { it.key to recommendationFor(it, workouts, unit) } }
+    val recs = remember(progress, workouts, bodyweight, unit) { progress.associate { it.key to recommendationFor(it, workouts, bodyweight, unit) } }
     val sections = remember(progress) { byCategory(progress) }
     // Only exercises trained recently count towards a muscle group's call.
     val changes = remember(progress, recs) {
@@ -276,8 +275,8 @@ private fun NextWeightTag(rec: Recommendation, ex: ExerciseProgress, unit: Weigh
 }
 
 /** In totals, like the rest of Progress. */
-private fun recommendationFor(ex: ExerciseProgress, workouts: List<Workout>, unit: WeightUnit): Recommendation? =
-    recommend(WorkoutExercise("", ex.name, ex.category, emptyList(), equipment = ex.equipment), workouts, unit)
+private fun recommendationFor(ex: ExerciseProgress, workouts: List<Workout>, bodyweight: List<BodyweightEntry>, unit: WeightUnit): Recommendation? =
+    recommend(WorkoutExercise("", ex.name, ex.category, emptyList(), equipment = ex.equipment), workouts, unit, bodyweight)
 
 /** Status glyph in the status color, label in text color, so state never rides on color alone. */
 @Composable
@@ -346,7 +345,7 @@ private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight
 
             rec?.takeIf { it.action != WeightAction.HOLD }?.let {
                 Column {
-                    Text("NEXT SESSION · ${TARGET_REPS.first}–${TARGET_REPS.last} REPS", style = SectionLabel, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("NEXT SESSION", style = SectionLabel, modifier = Modifier.padding(bottom = 8.dp))
                     RecommendationHint(it, ex.equipment, unit)
                 }
             }

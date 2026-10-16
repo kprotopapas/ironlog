@@ -1,24 +1,43 @@
 package com.example.gymtracker.data
 
-// ─── Next-weight recommendation (double progression) ─────────────────────────
+// ─── Next-weight recommendation ──────────────────────────────────────────────
 //
-// Stay at a weight and add reps until every working set reaches the top of the range, then
-// go up one step. If even the best set falls below the bottom of the range, go down one step.
-// Working sets are the sets at the heaviest weight of the last session, so warm-ups and
-// back-off sets don't count.
+// Judged by strength rather than a rep range, so heavy singles and high-rep sets both read
+// right. A session's strength is its best estimated one-rep max (see computeProgress), and
+// it's compared with the best of the few sessions before it:
+//   - beat that best: go up one step;
+//   - more than a tenth under it two sessions running: go down one step (one bad day isn't enough);
+//   - otherwise stay and beat last session's reps.
+// The next session repeats last session's sets, every weight moved by that step and the reps
+// kept, so a pyramid stays a pyramid and heavy doubles stay doubles.
 
-val TARGET_REPS = 8..12
+/** Sessions before the latest that its strength is compared with. */
+private const val BASELINE_SESSIONS = 3
+/** Below this share of the baseline a session counts as too heavy. */
+private const val TOO_HEAVY = 0.9
+/** Allowance for rounding, so matching the best isn't counted as beating it. */
+private const val BEAT_MARGIN = 1.005
 
 enum class WeightAction { INCREASE, HOLD, DECREASE }
 
 data class Recommendation(
     val action: WeightAction,
-    /** Working weight last session, as logged (added load for bodyweight), in the display unit. */
-    val lastWeight: Double,
-    val lastReps: List<Int>,
+    /** Last session's done sets in order, as logged (added load for bodyweight), in the display unit. */
+    val lastSets: List<ExerciseSet>,
     val lastDate: Long,
-    val nextWeight: Double,
-)
+    /** [lastSets] with every weight moved one step for [action]; the reps are the ones to beat. */
+    val nextSets: List<ExerciseSet>,
+) {
+    /** Heaviest weight last session. */
+    val lastWeight get() = lastSets.maxOf { it.weight }
+    /** Heaviest weight next session. */
+    val nextWeight get() = nextSets.maxOf { it.weight }
+    /** Last session's strongest set, by estimated max. */
+    val bestSet get() = lastSets.maxWith(compareBy({ estimatedOneRepMax(it.weight, it.reps) }, { it.reps }))
+
+    /** The weight for set [i] next session; sets beyond last session's repeat its last one. */
+    fun nextWeightFor(i: Int) = nextSets.getOrElse(i) { nextSets.last() }.weight
+}
 
 /** One plate / pin / dumbbell step, in [unit]. A pair of dumbbells logged as a total steps both. */
 fun weightStep(equipment: Equipment?, unit: WeightUnit, perSide: Boolean = false): Double {
@@ -31,60 +50,68 @@ fun weightStep(equipment: Equipment?, unit: WeightUnit, perSide: Boolean = false
     return if (equipment == Equipment.DUMBBELL && !perSide) step * 2 else step
 }
 
+/** Whether the latest of [values] (oldest first) beat, held, or fell well under the ones before it. */
+internal fun strengthCall(values: List<Double>): WeightAction {
+    fun baseline(i: Int) = values.subList((i - BASELINE_SESSIONS).coerceAtLeast(0), i).maxOrNull()
+    val last = values.lastIndex
+    val best = baseline(last) ?: return WeightAction.HOLD
+    if (values[last] > best * BEAT_MARGIN) return WeightAction.INCREASE
+    val tooHeavy = { i: Int -> baseline(i)?.let { values[i] < it * TOO_HEAVY } == true }
+    return if (tooHeavy(last) && tooHeavy(last - 1)) WeightAction.DECREASE else WeightAction.HOLD
+}
+
 /**
  * Recommendation for [exercise] from the most recent finished workout that has it, or null.
  * Weights are in [exercise]'s convention: last session's 10 kg a side reads as 20 kg if it's now total.
+ * [bodyweight] lets bodyweight exercises be judged by load; without it they're judged by reps.
  */
 fun recommend(
     exercise: WorkoutExercise,
     workouts: List<Workout>,
     unit: WeightUnit,
-    range: IntRange = TARGET_REPS,
+    bodyweight: List<BodyweightEntry> = emptyList(),
 ): Recommendation? {
     val key = seriesKey(exercise)
     val isBodyweight = exercise.equipment?.isBodyweight == true
-    for (w in workouts.sortedByDescending { it.date }) {
-        val sets = w.exercises.filter { seriesKey(it) == key }
+    val last = workouts.sortedByDescending { it.date }.firstNotNullOfOrNull { w ->
+        w.exercises.filter { seriesKey(it) == key }
             .flatMap { ex -> ex.sets.filter { it.done && it.reps > 0 }.map { ex to it } }
-            .map { (ex, s) -> s.unit.convert(s.weight, unit) * ex.sides / exercise.sides to s.reps }
-        if (sets.isEmpty()) continue
+            .map { (ex, s) -> ExerciseSet(s.reps, s.unit.convert(s.weight, unit) * ex.sides / exercise.sides, unit, false) }
+            .takeIf { it.isNotEmpty() }
+            ?.let { w to it }
+    } ?: return null
+    val (workout, lastSets) = last
+    // Without a weight there's nothing to adjust, except bodyweight where 0 means no added load.
+    if (lastSets.all { it.weight <= 0 } && !isBodyweight) return null
 
-        val working = sets.maxOf { it.first }
-        // Without a weight there's nothing to adjust, except bodyweight where 0 means no added load.
-        if (working <= 0 && !isBodyweight) return null
-        val reps = sets.filter { it.first >= working - 0.01 }.map { it.second }
-        val step = weightStep(exercise.equipment, unit, exercise.sides == 2)
+    val history = computeProgress(workouts.filter { it.date <= workout.date }, bodyweight, unit)
+        .firstOrNull { it.key == key }?.sessions.orEmpty()
+    var action = strengthCall(history.map { it.value })
+    // Can't go below no weight (e.g. unassisted pull-ups): keep working on reps instead.
+    if (action == WeightAction.DECREASE && lastSets.all { it.weight <= 0 }) action = WeightAction.HOLD
 
-        var action = when {
-            reps.all { it >= range.last } -> WeightAction.INCREASE
-            reps.max() < range.first -> WeightAction.DECREASE
-            else -> WeightAction.HOLD
-        }
-        // Can't go below no weight (e.g. unassisted pull-ups): keep working on reps instead.
-        if (action == WeightAction.DECREASE && working <= 0) action = WeightAction.HOLD
-        val next = when (action) {
-            WeightAction.INCREASE -> working + step
-            WeightAction.DECREASE -> (working - step).coerceAtLeast(0.0)
-            WeightAction.HOLD -> working
-        }
-        return Recommendation(action, working, reps, w.date, next)
+    val step = when (action) {
+        WeightAction.INCREASE -> weightStep(exercise.equipment, unit, exercise.sides == 2)
+        WeightAction.DECREASE -> -weightStep(exercise.equipment, unit, exercise.sides == 2)
+        WeightAction.HOLD -> 0.0
     }
-    return null
+    val nextSets = lastSets.map { it.copy(weight = (it.weight + step).coerceAtLeast(0.0)) }
+    return Recommendation(action, lastSets, workout.date, nextSets)
 }
 
 /**
- * Sets for a preset exercise: the recommended weight when there's history, with last session's
- * reps to beat if the weight stays and the bottom of the range if it changes. Without history,
- * the preset's own defaults.
+ * Sets for a preset exercise: last session's sets with the recommended weights when there's
+ * history, so the shape of the session carries over; without history, the preset's own defaults.
  */
-fun prefilledSets(preset: PresetExercise, workouts: List<Workout>, unit: WeightUnit): List<ExerciseSet> {
+fun prefilledSets(
+    preset: PresetExercise,
+    workouts: List<Workout>,
+    unit: WeightUnit,
+    bodyweight: List<BodyweightEntry> = emptyList(),
+): List<ExerciseSet> {
     val probe = WorkoutExercise("", preset.name, preset.category, emptyList(), equipment = preset.equipment, perSide = preset.perSide)
-    val rec = recommend(probe, workouts, unit)
-        ?: return List(preset.defaultSets) { ExerciseSet(preset.defaultReps, preset.defaultWeight, unit, false) }
-    return List(preset.defaultSets) { i ->
-        val reps = if (rec.action == WeightAction.HOLD) rec.lastReps.getOrElse(i) { rec.lastReps.last() } else TARGET_REPS.first
-        ExerciseSet(reps, rec.nextWeight, unit, false)
-    }
+    return recommend(probe, workouts, unit, bodyweight)?.nextSets
+        ?: List(preset.defaultSets) { ExerciseSet(preset.defaultReps, preset.defaultWeight, unit, false) }
 }
 
 /** Whether [exercise]'s heaviest set is above (+1) or below (−1) last session's working weight; 0 if the same. */
