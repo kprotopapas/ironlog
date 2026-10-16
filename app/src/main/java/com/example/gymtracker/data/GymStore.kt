@@ -40,6 +40,16 @@ class GymStore(context: Context) {
         if (active == null) remove(KEY_ACTIVE) else putString(KEY_ACTIVE, active.toJson().toString())
     }
 
+    fun loadTimer(): GymTimer = prefs.getString(KEY_TIMER, null)?.let {
+        try {
+            JSONObject(it).toGymTimer()
+        } catch (_: JSONException) {
+            null
+        }
+    } ?: GymTimer()
+
+    fun saveTimer(timer: GymTimer) = prefs.edit { putString(KEY_TIMER, timer.toJson().toString()) }
+
     private fun readArray(key: String): JSONArray? = prefs.getString(key, null)?.let {
         try {
             JSONArray(it)
@@ -54,6 +64,7 @@ class GymStore(context: Context) {
         const val KEY_PRESETS = "gym-presets"
         const val KEY_ACTIVE = "gym-active-workout"
         const val KEY_BODYWEIGHT = "gym-bodyweight"
+        const val KEY_TIMER = "gym-timer"
         const val KEY_MIGRATION_PREFIX = "gym-migrated-"
     }
 }

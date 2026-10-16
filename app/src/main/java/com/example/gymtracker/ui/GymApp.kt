@@ -23,6 +23,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,7 +48,11 @@ fun GymApp(vm: GymViewModel) {
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 480.dp).fillMaxSize()) {
-            TopBar(live = vm.activeWorkout != null, unitLabel = vm.unit.label, onToggleUnit = vm::toggleUnit)
+            var showTimer by rememberSaveable { mutableStateOf(false) }
+            TopBar(live = vm.activeWorkout != null, unitLabel = vm.unit.label, onToggleUnit = vm::toggleUnit) {
+                TimerChip(vm.timer, onClick = { showTimer = true })
+            }
+            if (showTimer) TimerDialog(vm.timer, onChange = vm::updateTimer, onDismiss = { showTimer = false })
 
             // Nav
             Box {
@@ -103,7 +110,7 @@ fun GymApp(vm: GymViewModel) {
 }
 
 @Composable
-private fun TopBar(live: Boolean, unitLabel: String, onToggleUnit: () -> Unit) {
+private fun TopBar(live: Boolean, unitLabel: String, onToggleUnit: () -> Unit, timer: @Composable () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -129,6 +136,7 @@ private fun TopBar(live: Boolean, unitLabel: String, onToggleUnit: () -> Unit) {
                 )
             }
         }
+        timer()
         Text(
             unitLabel,
             style = mono(12.sp, Gym.Dim),
