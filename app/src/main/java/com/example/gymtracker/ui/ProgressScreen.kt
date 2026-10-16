@@ -60,7 +60,6 @@ import com.example.gymtracker.data.Workout
 import com.example.gymtracker.data.bodyweightChange
 import com.example.gymtracker.data.bodyweightSeries
 import com.example.gymtracker.data.computeProgress
-import com.example.gymtracker.data.equipmentSummary
 import com.example.gymtracker.data.formatDate
 import com.example.gymtracker.data.formatWeight
 import com.example.gymtracker.ui.theme.Gym
@@ -248,7 +247,7 @@ private fun ExerciseRow(ex: ExerciseProgress, unit: WeightUnit, rec: Recommendat
             Column(Modifier.weight(1f)) {
                 Text(ex.name, style = display(16.sp, FontWeight.SemiBold, spacing = 0.03.em), maxLines = 1)
                 Text(
-                    listOfNotNull(equipmentSummary(ex.equipment, ex.perSide), headlineValue(ex, unit)).joinToString(" · "),
+                    listOfNotNull(ex.equipment?.label, headlineValue(ex, unit)).joinToString(" · "),
                     style = mono(12.sp),
                     maxLines = 1,
                 )
@@ -276,8 +275,9 @@ private fun NextWeightTag(rec: Recommendation, ex: ExerciseProgress, unit: Weigh
     }
 }
 
+/** In totals, like the rest of Progress. */
 private fun recommendationFor(ex: ExerciseProgress, workouts: List<Workout>, unit: WeightUnit): Recommendation? =
-    recommend(WorkoutExercise("", ex.name, ex.category, emptyList(), equipment = ex.equipment, perSide = ex.perSide), workouts, unit)
+    recommend(WorkoutExercise("", ex.name, ex.category, emptyList(), equipment = ex.equipment), workouts, unit)
 
 /** Status glyph in the status color, label in text color, so state never rides on color alone. */
 @Composable
@@ -311,7 +311,7 @@ private fun ExerciseDetail(ex: ExerciseProgress, unit: WeightUnit, hasBodyweight
     val session = sessions[selected]
 
     Column(Modifier.fillMaxSize()) {
-        DetailHeader(ex.name, equipmentSummary(ex.equipment, ex.perSide) ?: ex.category, onBack)
+        DetailHeader(ex.name, ex.equipment?.label ?: ex.category, onBack)
 
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),

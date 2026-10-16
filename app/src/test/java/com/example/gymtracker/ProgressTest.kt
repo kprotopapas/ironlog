@@ -31,7 +31,8 @@ class ProgressTest {
         equipment: Equipment? = Equipment.BARBELL,
         unit: WeightUnit = WeightUnit.KG,
         done: Boolean = true,
-    ) = WorkoutExercise("e", name, "Chest", sets.map { (w, r) -> ExerciseSet(r, w, unit, done) }, equipment = equipment)
+        perSide: Boolean = false,
+    ) = WorkoutExercise("e", name, "Chest", sets.map { (w, r) -> ExerciseSet(r, w, unit, done) }, equipment = equipment, perSide = perSide)
 
     @Test
     fun epley() {
@@ -109,9 +110,25 @@ class ProgressTest {
     }
 
     @Test
-    fun equipmentVariantsAreSeparateSeries() {
+    fun perSideAndTotalAreOneSeriesInTotals() {
+        // 10 kg a side on cables, then 20 kg on a machine: the same load, so no improvement.
         val p = computeProgress(
-            listOf(workout(1, exercise("Row", 50.0 to 8), exercise("Row", 20.0 to 8, equipment = Equipment.CABLE))),
+            listOf(
+                workout(3, exercise("Chest Fly", 10.0 to 10, equipment = Equipment.CABLE, perSide = true)),
+                workout(1, exercise("Chest Fly", 20.0 to 10, equipment = Equipment.MACHINE)),
+            ),
+            emptyList(), WeightUnit.KG, now,
+        ).single()
+        assertEquals(listOf(20.0, 20.0), p.sessions.map { it.logged })
+        assertEquals(p.sessions[0].value, p.sessions[1].value, 1e-9)
+        assertFalse(p.sessions[1].isPr)
+        assertEquals(Equipment.MACHINE, p.equipment)
+    }
+
+    @Test
+    fun bodyweightVariantIsSeparateSeries() {
+        val p = computeProgress(
+            listOf(workout(1, exercise("Dips", 0.0 to 8, equipment = Equipment.BODYWEIGHT), exercise("Dips", 40.0 to 8, equipment = Equipment.MACHINE))),
             emptyList(), WeightUnit.KG, now,
         )
         assertEquals(2, p.size)

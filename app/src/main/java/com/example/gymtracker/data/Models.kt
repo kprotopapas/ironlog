@@ -70,7 +70,10 @@ data class WorkoutExercise(
     val notes: String = "",
     val equipment: Equipment? = null,
     val perSide: Boolean = false,
-)
+) {
+    /** Per-side weights count for both sides: 10 kg a side is 20 kg total. */
+    val sides get() = if (perSide && equipment?.supportsPerSide == true) 2 else 1
+}
 
 data class Workout(
     val id: String,
@@ -223,10 +226,7 @@ fun formatWeight(value: Double): String =
     if (value == Math.floor(value) && !value.isInfinite()) value.toLong().toString() else value.toString()
 
 fun totalVolume(exercises: List<WorkoutExercise>): Double =
-    exercises.sumOf { ex ->
-        val sides = if (ex.perSide) 2 else 1
-        ex.sets.filter { it.done }.sumOf { it.weight * it.reps * sides }
-    }
+    exercises.sumOf { ex -> ex.sets.filter { it.done }.sumOf { it.weight * it.reps * ex.sides } }
 
 // ─── JSON ────────────────────────────────────────────────────────────────────
 

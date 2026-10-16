@@ -15,8 +15,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class RecommendationTest {
-    private fun ex(vararg sets: Pair<Double, Int>, equipment: Equipment? = Equipment.BARBELL, unit: WeightUnit = WeightUnit.KG) =
-        WorkoutExercise("e", "Bench Press", "Chest", sets.map { (w, r) -> ExerciseSet(r, w, unit, true) }, equipment = equipment)
+    private fun ex(vararg sets: Pair<Double, Int>, equipment: Equipment? = Equipment.BARBELL, unit: WeightUnit = WeightUnit.KG, perSide: Boolean = false) =
+        WorkoutExercise("e", "Bench Press", "Chest", sets.map { (w, r) -> ExerciseSet(r, w, unit, true) }, equipment = equipment, perSide = perSide)
 
     private fun history(vararg exercises: WorkoutExercise) =
         exercises.mapIndexed { i, e -> Workout("w$i", "W", i * 1000L, 0, listOf(e)) }
@@ -62,7 +62,8 @@ class RecommendationTest {
 
     @Test
     fun stepsFollowEquipment() {
-        assertEquals(24.0, rec(ex(22.0 to 12, equipment = Equipment.DUMBBELL)).nextWeight, 1e-9)
+        assertEquals(24.0, rec(ex(22.0 to 12, equipment = Equipment.DUMBBELL, perSide = true)).nextWeight, 1e-9)
+        assertEquals(48.0, rec(ex(44.0 to 12, equipment = Equipment.DUMBBELL)).nextWeight, 1e-9) // a pair, as a total
         assertEquals(55.0, rec(ex(50.0 to 12, equipment = Equipment.MACHINE)).nextWeight, 1e-9)
     }
 
@@ -76,9 +77,20 @@ class RecommendationTest {
     }
 
     @Test
-    fun differentEquipmentIsADifferentExercise() {
-        val cable = ex(equipment = Equipment.CABLE)
-        assertNull(recommend(cable, history(ex(60.0 to 12)), WeightUnit.KG))
+    fun otherEquipmentCountsInTheCurrentConvention() {
+        // Last time 10 kg a side on cables; now on a machine logged as a total.
+        val machine = ex(equipment = Equipment.MACHINE)
+        val r = recommend(machine, history(ex(10.0 to 10, equipment = Equipment.CABLE, perSide = true)), WeightUnit.KG)!!
+        assertEquals(20.0, r.lastWeight, 1e-9)
+        assertEquals(0, weightChange(ex(20.0 to 8, equipment = Equipment.MACHINE), r, WeightUnit.KG))
+        // And back: 20 kg total reads as 10 kg a side.
+        val cable = ex(equipment = Equipment.CABLE, perSide = true)
+        assertEquals(10.0, recommend(cable, history(ex(20.0 to 10, equipment = Equipment.MACHINE)), WeightUnit.KG)!!.lastWeight, 1e-9)
+    }
+
+    @Test
+    fun bodyweightIsADifferentExercise() {
+        assertNull(recommend(ex(equipment = Equipment.BODYWEIGHT), history(ex(60.0 to 12)), WeightUnit.KG))
     }
 
     @Test

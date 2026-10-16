@@ -5,6 +5,8 @@ package com.example.gymtracker.data
 // Progress is measured per exercise as the best estimated one-rep max (Epley) of each
 // session, so heavier weight and more reps at the same weight both count. Bodyweight
 // exercises add the bodyweight logged closest before the session to the added load.
+// An exercise is one series whatever it's done with, and per-side weights count as their
+// total, so 10 kg a side on cables and 20 kg on a machine are the same load.
 
 const val DAY_MILLIS = 24L * 60 * 60 * 1000
 const val TREND_WINDOW_DAYS = 56 // 8 weeks
@@ -28,7 +30,7 @@ data class SessionBest(
     val value: Double,
     /** Total load moved, including bodyweight for bodyweight exercises. */
     val load: Double,
-    /** Weight as logged; the added load for bodyweight exercises. */
+    /** Weight as logged but per-side doubled to the total; the added load for bodyweight exercises. */
     val logged: Double,
     val reps: Int,
     /** Bodyweight at the time, if any has been logged. */
@@ -43,8 +45,8 @@ data class ExerciseProgress(
     val key: String,
     val name: String,
     val category: String,
+    /** What it was last done with. */
     val equipment: Equipment?,
-    val perSide: Boolean,
     val metric: ProgressMetric,
     /** Oldest first; never empty. */
     val sessions: List<SessionBest>,
@@ -69,8 +71,12 @@ class BodyweightLog(entries: List<BodyweightEntry>, private val unit: WeightUnit
     }
 }
 
+/**
+ * Equipment and per-side don't split an exercise, except bodyweight: its logged weight is added
+ * load on top of bodyweight, so it doesn't compare with a loaded version.
+ */
 internal fun seriesKey(ex: WorkoutExercise) =
-    "${ex.name.trim().lowercase()}|${ex.equipment?.name}|${ex.perSide && ex.equipment?.supportsPerSide == true}"
+    ex.name.trim().lowercase() + if (ex.equipment?.isBodyweight == true) "|bodyweight" else ""
 
 private class LoggedSet(val date: Long, val load: Double, val logged: Double, val reps: Int, val bodyweight: Double?)
 
@@ -91,7 +97,7 @@ fun computeProgress(
             val sets = instances.flatMap { ex ->
                 val isBodyweight = ex.equipment?.isBodyweight == true
                 ex.sets.filter { it.done && it.reps > 0 }.map { s ->
-                    val logged = s.unit.convert(s.weight, unit)
+                    val logged = s.unit.convert(s.weight, unit) * ex.sides
                     val load = if (isBodyweight) logged + (bodyweightThen ?: 0.0) else logged
                     LoggedSet(w.date, load, logged, s.reps, bodyweightThen)
                 }
@@ -141,7 +147,6 @@ fun computeProgress(
             name = ex.name,
             category = ex.category,
             equipment = ex.equipment,
-            perSide = ex.perSide && ex.equipment?.supportsPerSide == true,
             metric = metric,
             sessions = sessionsOut,
             repRecords = repRecords,

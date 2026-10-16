@@ -20,17 +20,21 @@ data class Recommendation(
     val nextWeight: Double,
 )
 
-/** One plate / pin / dumbbell step, in [unit]. Dumbbells are per dumbbell when logged per side. */
-fun weightStep(equipment: Equipment?, unit: WeightUnit): Double {
+/** One plate / pin / dumbbell step, in [unit]. A pair of dumbbells logged as a total steps both. */
+fun weightStep(equipment: Equipment?, unit: WeightUnit, perSide: Boolean = false): Double {
     val kg = when (equipment) {
         Equipment.DUMBBELL -> 2.0
         Equipment.MACHINE -> 5.0
         else -> 2.5
     }
-    return if (unit == WeightUnit.KG) kg else if (equipment == Equipment.MACHINE) 10.0 else 5.0
+    val step = if (unit == WeightUnit.KG) kg else if (equipment == Equipment.MACHINE) 10.0 else 5.0
+    return if (equipment == Equipment.DUMBBELL && !perSide) step * 2 else step
 }
 
-/** Recommendation for [exercise] from the most recent finished workout that has it, or null. */
+/**
+ * Recommendation for [exercise] from the most recent finished workout that has it, or null.
+ * Weights are in [exercise]'s convention: last session's 10 kg a side reads as 20 kg if it's now total.
+ */
 fun recommend(
     exercise: WorkoutExercise,
     workouts: List<Workout>,
@@ -41,16 +45,15 @@ fun recommend(
     val isBodyweight = exercise.equipment?.isBodyweight == true
     for (w in workouts.sortedByDescending { it.date }) {
         val sets = w.exercises.filter { seriesKey(it) == key }
-            .flatMap { it.sets }
-            .filter { it.done && it.reps > 0 }
-            .map { it.unit.convert(it.weight, unit) to it.reps }
+            .flatMap { ex -> ex.sets.filter { it.done && it.reps > 0 }.map { ex to it } }
+            .map { (ex, s) -> s.unit.convert(s.weight, unit) * ex.sides / exercise.sides to s.reps }
         if (sets.isEmpty()) continue
 
         val working = sets.maxOf { it.first }
         // Without a weight there's nothing to adjust, except bodyweight where 0 means no added load.
         if (working <= 0 && !isBodyweight) return null
         val reps = sets.filter { it.first >= working - 0.01 }.map { it.second }
-        val step = weightStep(exercise.equipment, unit)
+        val step = weightStep(exercise.equipment, unit, exercise.sides == 2)
 
         var action = when {
             reps.all { it >= range.last } -> WeightAction.INCREASE
